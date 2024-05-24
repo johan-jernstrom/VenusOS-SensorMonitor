@@ -43,7 +43,8 @@ class DcCurrents:
         # Read the voltage of each channel
         for i in range(self.numberOfChannels):
             voltage = getattr(self, 'channel' + str(i)).voltage
-            values[str(i)] = round(voltage, 3)
-            self.logger.debug("dc_currents: Channel " + str(i) + " voltage: " + str(voltage))
-
+            self.logger.debug("dc_currents: Channel " + str(i) + " voltage: " + str(voltage))   
+            current = 150/5 * voltage   # 150A/5V
+            values[str(i)] = round(current, 3)
+            self.logger.debug("dc_currents: Channel " + str(i) + " current: " + str(current))
         return values
