@@ -39,7 +39,7 @@ def create_temp_service_if_not_exists(id):
         tempServices[id] = TemparatureService(conn, id, instance)
 
 def update_current_services():
-    newCurrents = dc_currents.read_fake_random_currents()
+    newCurrents = dc_currents.read_currents()
     for id in newCurrents:
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
