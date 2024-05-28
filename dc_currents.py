@@ -6,14 +6,14 @@ from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 import logging
 
 class DcCurrents:
-    def __init__(self, numberOfChannels = 3):
+    def __init__(self, channels = [1,2,3]):
         self.logger = logging.getLogger(__name__)
         self.logger.info("dc_currents: Initializing")
-        self.i2cInitialized = False
-        self.numberOfChannels = numberOfChannels
+        self.i2cConnected = False
+        self.channels = channels
     
-    def ensure_i2c(self):
-        if self.i2cInitialized:
+    def ensure_i2c_connected(self):
+        if self.i2cConnected:
             return
         try:
             self.logger.debug("dc_currents: Initializing I2C")
@@ -23,28 +23,32 @@ class DcCurrents:
             # Create an ADS1115 object
             ads = ADS.ADS1115(i2c, gain=2/3)
 
-            for i in range(self.numberOfChannels):
+            for i in self.channels:
                 setattr(self, 'channel' + str(i), AnalogIn(ads, getattr(ADS, 'P' + str(i))))
                 self.logger.debug("dc_currents: Channel " + str(i) + " initialized")
-            self.i2cInitialized = True
+
+            self.i2cConnected = True
         except Exception as e:
-            self.logger.error("dc_currents: Error initializing I2C: " + str(e))
-            self.i2cInitialized = False
+            self.logger.debug("dc_currents: Error initializing I2C: " + str(e))
+            self.i2cConnected = False
 
 
     def read_currents(self):
         values = {}
-        self.ensure_i2c()
+        self.ensure_i2c_connected()
+        try:
+            if not self.i2cConnected:
+                self.logger.debug("dc_currents: I2C not initialized")
+                return values
 
-        if not self.i2cInitialized:
-            self.logger.warning("dc_currents: I2C not initialized")
-            return values
-
-        # Read the voltage of each channel
-        for i in range(self.numberOfChannels):
-            voltage = getattr(self, 'channel' + str(i)).voltage
-            self.logger.debug("dc_currents: Channel " + str(i) + " voltage: " + str(voltage))   
-            current = 150/5 * voltage   # 150A/5V
-            values[str(i)] = round(current, 3)
-            self.logger.debug("dc_currents: Channel " + str(i) + " current: " + str(current))
+            # Read the voltage of each channel
+            for i in self.channels:
+                voltage = getattr(self, 'channel' + str(i)).voltage
+                self.logger.debug("dc_currents: Channel " + str(i) + " voltage: " + str(voltage))   
+                current = 150/5 * voltage   # 150A/5V
+                values[str(i)] = round(current, 1)
+                self.logger.debug("dc_currents: Channel " + str(i) + " current: " + str(current))
+        except Exception as e:
+            self.i2cConnected = False
+            self.logger.debug("dc_currents: Error reading currents: " + str(e))
         return values

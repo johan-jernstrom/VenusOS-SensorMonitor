@@ -9,7 +9,7 @@ from vedbus import VeDbusService # type: ignore
 from settingsdevice import SettingsDevice # type: ignore
 
 VOLTAGE_TEXT = lambda path,value: "{:.2f}V".format(value)
-CURRENT_TEXT = lambda path,value: "{:.3f}A".format(value)
+CURRENT_TEXT = lambda path,value: "{:.1f}A".format(value)
 POWER_TEXT = lambda path,value: "{:.2f}W".format(value)
 ENERGY_TEXT = lambda path,value: "{:.6f}kWh".format(value)
 TEMPERATURE_TEXT = lambda path,value: "{:.2f}'C".format(value)
@@ -117,8 +117,11 @@ class TemparatureService(DbusService):
         super().update()
         self.dbusservice['/Temperature'] = value
         self.logger.debug(f"Updated temperature to {value}")
-    
 
+    def disconnect(self):
+        self.dbusservice['/Temperature'] = None
+        super().disconnect()
+    
 class DCSourceService(DbusService):
     def __init__(self, connection, id, deviceInstance):
         super().__init__('dcsource', connection, id, deviceInstance)
@@ -139,7 +142,6 @@ class DCSourceService(DbusService):
 
         self._init_settings([('CustomName', [self.name, 0, 0]), ('Alarms/LowTemperature', [0, -20, 100]), ('Alarms/HighTemperature', [0, -20, 100]), ('DiffAlarm', [50, 0, 100])])
         
-    
     def update(self, current, temperature):
         super().update()
         self.dbusservice['/Dc/0/Current'] = current
@@ -149,3 +151,8 @@ class DCSourceService(DbusService):
             self.logger.debug(f"Updated maximum current to {current}")
         
         self.logger.debug(f"Updated current to {current} and temperature to {temperature}")
+
+    def disconnect(self):
+        self.dbusservice['/Dc/0/Current'] = None
+        self.dbusservice['/Dc/0/Temperature'] = None
+        super().disconnect()

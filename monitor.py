@@ -72,8 +72,10 @@ def create_current_service_if_not_exist(id):
 
 def calculate_diff(newCurrents, id, current):
     otherCurrents = [newCurrents[x] for x in newCurrents if x != id]
-    diff = abs(current - sum(otherCurrents) / len(otherCurrents)) if len(otherCurrents) > 0 else 0
-    diffPercent = diff / sum(otherCurrents) * 100 if sum(otherCurrents) != 0 else 0
+    avgOtherCurrents = sum(otherCurrents) / len(otherCurrents) if len(otherCurrents) > 0 else 0
+    diff = abs(current - avgOtherCurrents)
+    diffPercent = diff / avgOtherCurrents * 100 if avgOtherCurrents != 0 else 0
+    logging.debug(f"Id: {id}, Current: {current}, Other currents: {otherCurrents}, Diff: {diff}, DiffPercent: {diffPercent}")
     return diffPercent
 
 def main():
@@ -97,5 +99,5 @@ def main():
     logging.info('Exiting...')
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
-    main()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
+    main() 
