@@ -63,7 +63,7 @@ class DbusService:
         for settingName, values in settingList:
             self.supportedSettings[settingName] = [settingsBasePath + '/' + settingName, values[0], values[1], values[2]]
             self.logger.debug(f"Added setting {settingName} with values {values}")
-        self.settings = SettingsDevice(bus=self.dbusconnection(), supportedSettings=self.supportedSettings, timeout=10, eventCallback=self._handle_setting_changed)
+        self.settings = SettingsDevice(bus=self.dbusconnection(), supportedSettings=self.supportedSettings, eventCallback=self._handle_setting_changed)
 
         self.logger.info(f"Settings added to service {self.servicename}")
 
@@ -87,7 +87,6 @@ class DbusService:
     
     def _handle_setting_changed(self, setting, old, new):
         self.logger.info(f"Setting {setting} changed from {old} to {new}")
-        # self.dbusSettings[setting] = new
         return True # accept the change
     
     def dbusconnection(self):

@@ -9,12 +9,14 @@ class W1Temps:
         values = {}
         #read list of slaves
         if not os.path.isfile('/sys/devices/w1_bus_master1/w1_master_slaves'):
+            self.logger.debug("Path for 1Wire devices not found, check overlay in /boot/config.txt")
             return values
         fd = open('/sys/devices/w1_bus_master1/w1_master_slaves','r')
         w1Slaves = fd.read().splitlines()
         fd.close
 
         if w1Slaves[0] == 'not found.':
+            self.logger.debug("No 1Wire devices found")
             return values
         
         #Loop through all connected 1Wire devices, create dbusService if necessary
@@ -38,6 +40,6 @@ class W1Temps:
                         value = round(value / 1000.0, 1)
                         values[deviceID] = value
                 fd.close
-            self.logger.debug("1Wire Sensor " + id + " Temperature: " + str(value))
+            self.logger.debug("1Wire Sensor " + id + " Temperature: " + str(values[deviceID]))
         return values
         

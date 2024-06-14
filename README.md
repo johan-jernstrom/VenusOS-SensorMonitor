@@ -51,6 +51,7 @@ You need to setup some depenacies on your VenusOS first
     ```
 1) Install all dependencies, eg:
     ```bash
+    pip3 install RPi.GPIO
     pip3 install gpiozero
     pip3 install adafruit-circuitpython-ads1x15
     ```
