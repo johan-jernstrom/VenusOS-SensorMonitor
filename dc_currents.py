@@ -11,6 +11,8 @@ class DcCurrents:
         self.logger.info("dc_currents: Initializing")
         self.i2cConnected = False
         self.channels = channels    # Channels to read from. Channel 0 is not used in current wiring
+        for i in self.channels:
+            setattr(self, 'channel' + str(i) + 'Zero', 0)   # initialize zero values
     
     def ensure_i2c_connected(self):
         if self.i2cConnected:
@@ -60,7 +62,7 @@ class DcCurrents:
                 voltage -= getattr(self, 'channel' + str(i) + 'Zero')
                 self.logger.debug("dc_currents: Channel " + str(i) + " voltage after zero: " + str(voltage))
                 current = 150/5 * voltage   # 150A/5V
-                values[str(i)] = round(current, 1)
+                values[str(i)] = round(current,0)
                 self.logger.debug("dc_currents: Channel " + str(i) + " current: " + str(current))
         except Exception as e:
             self.i2cConnected = False

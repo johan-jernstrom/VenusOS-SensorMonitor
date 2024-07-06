@@ -9,7 +9,7 @@ from vedbus import VeDbusService # type: ignore
 from settingsdevice import SettingsDevice # type: ignore
 
 VOLTAGE_TEXT = lambda path,value: "{:.2f}V".format(value)
-CURRENT_TEXT = lambda path,value: "{:.1f}A".format(value)
+CURRENT_TEXT = lambda path,value: "{:.0f}A".format(value)
 POWER_TEXT = lambda path,value: "{:.2f}W".format(value)
 ENERGY_TEXT = lambda path,value: "{:.6f}kWh".format(value)
 TEMPERATURE_TEXT = lambda path,value: "{:.2f}'C".format(value)
