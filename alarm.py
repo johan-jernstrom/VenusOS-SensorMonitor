@@ -15,7 +15,12 @@ class AlarmBuzzer:
         self.button.when_held = self.test_buzzer
 
         self.active_alarms = {}    # dictionary to keep track of sensors that are currently active
-        self.silence_time = 30*60 # seconds to keep sensor silent after it has been activated
+        self.silence_time = 30*60 # seconds to keep sensor silent after it has been silenced
+
+        # prevent alarm during the first minute after initialization to prevent false alarms due to sensor initialization
+        self.initialization_time = 1*60
+        self.initialization_start = time.time()
+        self.logger.info("AlarmBuzzer initialized")
 
     def test_buzzer(self):
         if self.buzzer.is_active:
@@ -43,6 +48,10 @@ class AlarmBuzzer:
             valueThreshold = float(valueThreshold)
         except:
             self.logger.error("AlarmBuzzer: Error converting value " + str(value) + " or valueThreshold " + str(valueThreshold) + " to float")
+            return
+        
+        if time.time() - self.initialization_start < self.initialization_time:
+            self.logger.debug("AlarmBuzzer: Preventing alarm during initialization")
             return
 
         if value > valueThreshold:

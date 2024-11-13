@@ -54,7 +54,13 @@ def update_current_services():
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
         current = newCurrents[id]
+        if current < 1 and current > -1:    # ignore small currents
+            current = 0
         currentServices[id].update(current, temp)
+        if currentServices[id].settings['DiffAlarm'] == 0:
+            continue    # skip diff check if alarm is disabled
+        if abs(sum(newCurrents.values())) / len(newCurrents) < 2:
+            continue    # skip diff check if overall current is low
         diffPercent = calculate_diff(newCurrents, id, current)
         alarm.check_value(diffPercent, currentServices[id].settings['DiffAlarm'], id)
 
@@ -101,10 +107,10 @@ def main():
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
     # make initial call
+    # dc_currents.set_zero()
     update_current_services()
     # and then every 1 seconds
     GLib.timeout_add_seconds(1, lambda: update_current_services())
-
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
