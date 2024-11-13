@@ -2,8 +2,8 @@ import asyncio
 from datetime import datetime, timedelta
 from bleak import BleakScanner
 import logging
-from threading import Thread, Lock
-from SensorData import SensorData
+from threading import Thread, Lock, Event
+from TempSensorData import TempSensorData
 
 class BLETemps:
     """
@@ -21,7 +21,7 @@ class BLETemps:
         # create dict containg device name as key and SensorData object as value
         self.values = {} # store latest values
         self.scanner_thread = None
-        self.stop_event = asyncio.Event()
+        self.stop_event = Event()
         self.Lock = Lock()
 
     def _parse_bthome_v2_data(self, data):
@@ -52,7 +52,8 @@ class BLETemps:
         index += 1
 
         # Create an instance of SensorData to store the decoded values
-        sensor_data = SensorData()
+        sensor_data = TempSensorData()
+        sensor_data.connection = 'BLE'
 
         # Iterate through the remaining bytes to extract sensor data
         while index < len(data):
@@ -77,7 +78,7 @@ class BLETemps:
     def start_scanner(self):
         self.logger.info("Starting BLE Temps scanner...")
         if self.scanner_thread is not None:
-            self.logger.warn("Scanner thread already started. Ignoring request to start again.")
+            self.logger.warning("Scanner thread already started. Ignoring request to start again.")
             return
         self.scanner_thread = Thread(target=self._scan,name="BLE Temp Scanner Thread", daemon=True)
         self.scanner_thread.start()
@@ -85,7 +86,7 @@ class BLETemps:
     def stop_scanner(self):
         self.logger.info("Stopping BLE Temps scanner...")
         if self.scanner_thread is None:
-            self.logger.warn("BLE Temps scanner thread not started. Ignoring request to stop.")
+            self.logger.warning("BLE Temps scanner thread not started. Ignoring request to stop.")
             return
         self.stop_event.set()   # signal thread to stop
         self.scanner_thread.join()  # wait for thread to stop
@@ -96,7 +97,9 @@ class BLETemps:
 
     async def _scanAsync(self):
         try:
-            async with BleakScanner(self._scan_callback):
+            async with BleakScanner(self._scan_callback) as scanner:
+                while not self.stop_event.is_set():
+                    await asyncio.sleep(1)
                 logging.info('Starting scan...')
                 await self.stop_event.wait()    # wait for stop event
         except Exception as e:
@@ -104,21 +107,25 @@ class BLETemps:
         self.logger.info("Scanning stopped.")
 
     def _scan_callback(self, device, advertising_data):
-        if(device.address.startswith("A4:C1:38:")): # All Xiaomi Mijia LYWSD03MMC devices start with this address
-            advertisement_data = advertising_data.service_data['0000fcd2-0000-1000-8000-00805f9b34fb']  # BTHome V2 service UUID
-            if not advertisement_data:
-                return
-            sensor_data = self._parse_bthome_v2_data(advertisement_data)
-            if sensor_data:
-                self.logger.info(f"Device {device.name} Temperature: {sensor_data.temperature}°C, Humidity: {sensor_data.humidity}%, Battery: {sensor_data.battery}%")
-                with self.Lock:
-                    self.values[device.name] = sensor_data
-        pass
+        try:
+            # logging.debug(f"Device {device.name} ({device.address}) RSSI: {device.rssi}")
+            if(device.address.startswith("A4:C1:38:")): # All Xiaomi Mijia LYWSD03MMC devices start with this address
+                logging.debug(f"Found Xiaomi Mijia device {device.name} ({device.address}) RSSI: {device.rssi}")
+                advertisement_data = advertising_data.service_data.get('0000fcd2-0000-1000-8000-00805f9b34fb')  # BTHome V2 service UUID
+                if not advertisement_data:
+                    return
+                logging.debug(f"BTHome V2 service found in advertisement data")
+
+                sensor_data = self._parse_bthome_v2_data(advertisement_data)
+                if sensor_data:
+                    sensor_data.id = device.name
+                    with self.Lock:
+                        self.values[device.name] = sensor_data
+        except Exception as e:
+            self.logger.error(f"Error in scan callback: {e}")
 
     def get_values(self):
         with self.Lock:
             # remove values older than 5 minutes before returning
             self.values = {k:v for k,v in self.values.items() if v.timestamp > datetime.now() - timedelta(minutes=5)}
             return self.values
-
-        

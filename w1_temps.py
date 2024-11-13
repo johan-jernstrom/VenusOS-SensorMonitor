@@ -1,7 +1,7 @@
 import os
 import logging
 
-from SensorData import SensorData
+from TempSensorData import TempSensorData
 
 class W1Temps:
     def __init__(self):
@@ -49,8 +49,7 @@ class W1Temps:
                     if lines[0].strip('-').isnumeric():
                         value = float(lines[0])
                         value = round(value / 1000.0, 1)
-                        sensor_data = SensorData()
-                        sensor_data.temperature = value
+                        sensor_data = TempSensorData(id=deviceID, connection='Wire', temperature=value)
                         values[deviceID] = sensor_data
                 fd.close
             self.logger.debug("1Wire Sensor " + id + " Temperature: " + str(values[deviceID]))

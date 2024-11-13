@@ -50,11 +50,11 @@ class AlarmBuzzer:
             self.logger.error("AlarmBuzzer: Error converting value " + str(value) + " or valueThreshold " + str(valueThreshold) + " to float")
             return
         
-        if time.time() - self.initialization_start < self.initialization_time:
-            self.logger.debug("AlarmBuzzer: Preventing alarm during initialization")
-            return
-
         if value > valueThreshold:
+            if time.time() - self.initialization_start < self.initialization_time:
+                self.logger.debug("AlarmBuzzer: Preventing alarm during initialization")
+                return
+            
             self.logger.info("Alarm for sensor " + str(sensorId))
 
             # check dictonary value for sensorId and if it is there then check if it is within self.SensorSilenceTime seconds

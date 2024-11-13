@@ -1,6 +1,6 @@
 import os
 import logging
-from SensorData import SensorData
+from TempSensorData import TempSensorData
 
 class CPUTemp:
     def __init__(self):
@@ -25,7 +25,6 @@ class CPUTemp:
         value = round(value / 1000.0, 1)
         self.logger.debug("CPU Temperature: " + str(value))
         fd.close
-        sensor_data = SensorData()
-        sensor_data.temperature = value
+        sensor_data = TempSensorData(id='rpi', connection='CPU', temperature=value)
         return sensor_data
     

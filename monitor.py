@@ -8,7 +8,9 @@ from ble_temps import BLETemps
 from dc_currents import DcCurrents
 from alarm import AlarmBuzzer
 from dbus_service import DCSourceService, TemparatureService
+from TempSensorData import TempSensorData
 
+# Create a dictionary to keep track of the services that are currently active, one for temperature services and one for current services
 tempServices = {}
 currentServices = {}
 
@@ -20,33 +22,37 @@ dc_currents = DcCurrents()
 alarm = AlarmBuzzer()
 
 def update_temp_services():
+    logging.debug('Updating temperature services...')
     newTemps = ble_temps.get_values() # get BLE temperatures
     newTemps.update(w1_temps.read_temperatures())   # add w1 temperatures
     newTemps['rpi'] = cpu_temp.read_temperature()   # add CPU temperature
     
     for id in newTemps:
-        create_temp_service_if_not_exists(id)
+        data = newTemps[id]
+        if data is None:
+            continue
+
+        create_temp_service_if_not_exists(data)
 
         # get SensorData and update service
-        data = newTemps[id]
         service = tempServices[id]
-        service.update(data.temperature, data.humidity)
+        service.update(data.temperature, data.humidity, data.battery)
 
         # check if temperature is above the high temperature alarm
         alarm.check_value(data.temperature, service.settings['HighTempAlarm'], id)
 
-    # disconnect services that are no longer available
+    # disconnect services that are no longer available by checking if the id is in the newTemps dictionary
     for id in tempServices:
         if id not in newTemps:
             tempServices[id].disconnect()
     
     return True
 
-def create_temp_service_if_not_exists(id):
+def create_temp_service_if_not_exists(sensorData):
+    id = sensorData.id
     if id not in tempServices:
-        conn = 'CPU' if id == 'rpi' else 'Wire'
         instance = 1000 + len(tempServices)
-        tempServices[id] = TemparatureService(conn, id, instance)
+        tempServices[id] = TemparatureService(sensorData.connection, sensorData.id, instance)
 
 def update_current_services():
     newCurrents = dc_currents.read_currents()
@@ -100,18 +106,18 @@ def main():
 
     # Start the BLE scanner
     ble_temps.start_scanner()
+    logging.info('BLE scanner started, moving on')
 
     # make initial call
     update_temp_services()
     # and then every 5 seconds
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
-    # make initial call
+    # # make initial call
     # dc_currents.set_zero()
-    update_current_services()
-    # and then every 1 seconds
-    GLib.timeout_add_seconds(1, lambda: update_current_services())
-    GLib.timeout_add_seconds(5, lambda: update_temp_services())
+    # update_current_services()
+    # # and then every 1 seconds
+    # GLib.timeout_add_seconds(1, lambda: update_current_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
     mainloop.run()

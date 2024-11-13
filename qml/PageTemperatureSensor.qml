@@ -116,6 +116,16 @@ MbPage {
 		}
 
 		MbItemValue {
+			id: battery
+			description: qsTr("Battery")
+			show: item.valid
+			item {
+				bind: service.path("/Battery")
+				unit: "%"
+			}
+		}
+
+		MbItemValue {
 			description: qsTr("Sensor battery")
 			show: item.valid
 			item {

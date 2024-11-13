@@ -13,6 +13,8 @@ CURRENT_TEXT = lambda path,value: "{:.0f}A".format(value)
 POWER_TEXT = lambda path,value: "{:.2f}W".format(value)
 ENERGY_TEXT = lambda path,value: "{:.6f}kWh".format(value)
 TEMPERATURE_TEXT = lambda path,value: "{:.2f}'C".format(value)
+HUMIDITY_TEXT = lambda path,value: "{:.2f}%".format(value)
+BATTERY_TEXT = lambda path,value: "{:.2f}%".format(value)
 
 class SystemBus(dbus.bus.BusConnection):
     def __new__(cls):
@@ -106,19 +108,26 @@ class TemparatureService(DbusService):
         super().__init__('temperature', connection, id, deviceInstance)
 
         self.dbusservice.add_path('/Temperature', None, gettextcallback=TEMPERATURE_TEXT)
+        self.dbusservice.add_path('/Humidity', None, gettextcallback=HUMIDITY_TEXT)
         self.dbusservice.add_path('/TemperatureType', 0, writeable=True, onchangecallback = self._handle_value_changed)
         self.dbusservice.add_path('/CustomName', None, writeable=True, onchangecallback = self._handle_value_changed)
         self.dbusservice.add_path('/HighTempAlarm', 0, writeable=True, gettextcallback=TEMPERATURE_TEXT, onchangecallback = self._handle_value_changed)
+        self.dbusservice.add_path('/Battery', None, gettextcallback=BATTERY_TEXT)
 
         self._init_settings([('TemperatureType', [0, 0, 2]), ('CustomName', [self.name, 0, 0]), ('HighTempAlarm', [70, 0, 100])])
 
-    def update(self, tempValue, humidityValue = None):
+    def update(self, tempValue, humidityValue = None, batteryValue = None):
         super().update()
         self.dbusservice['/Temperature'] = tempValue
         self.logger.debug(f"Updated temperature to {tempValue}")
+        
         if humidityValue is not None:
             self.dbusservice['/Humidity'] = humidityValue
             self.logger.debug(f"Updated humidity to {humidityValue}")
+        
+        if batteryValue is not None:
+            self.dbusservice['/Battery'] = batteryValue
+            self.logger.debug(f"Updated battery to {batteryValue}")
 
     def disconnect(self):
         self.dbusservice['/Temperature'] = None
