@@ -4,6 +4,7 @@ from gi.repository import GLib # type: ignore
 from dbus.mainloop.glib import DBusGMainLoop # type: ignore
 from cpu_temp import CPUTemp
 from w1_temps import W1Temps
+from ble_temps import BLETemps
 from dc_currents import DcCurrents
 from alarm import AlarmBuzzer
 from dbus_service import DCSourceService, TemparatureService
@@ -14,16 +15,25 @@ currentServices = {}
 # Create the sensors that will be monitored and exposed to dbus
 cpu_temp = CPUTemp()
 w1_temps = W1Temps()
+ble_temps = BLETemps()
 dc_currents = DcCurrents()
 alarm = AlarmBuzzer()
 
 def update_temp_services():
-    newTemps = w1_temps.read_temperatures()
-    newTemps['rpi'] = cpu_temp.read_temperature()
+    newTemps = ble_temps.get_values() # get BLE temperatures
+    newTemps.update(w1_temps.read_temperatures())   # add w1 temperatures
+    newTemps['rpi'] = cpu_temp.read_temperature()   # add CPU temperature
+    
     for id in newTemps:
         create_temp_service_if_not_exists(id)
-        tempServices[id].update(newTemps[id])
-        alarm.check_value(newTemps[id], tempServices[id].settings['HighTempAlarm'], id)
+
+        # get SensorData and update service
+        data = newTemps[id]
+        service = tempServices[id]
+        service.update(data.temperature, data.humidity)
+
+        # check if temperature is above the high temperature alarm
+        alarm.check_value(data.temperature, service.settings['HighTempAlarm'], id)
 
     # disconnect services that are no longer available
     for id in tempServices:
@@ -63,7 +73,6 @@ def find_temp_for_current(id):
             return tempService.dbusservice['/Temperature']
     return None
 
-
 def create_current_service_if_not_exist(id):
     if id in currentServices:
         return
@@ -83,6 +92,9 @@ def main():
     DBusGMainLoop(set_as_default=True)
     mainloop = GLib.MainLoop()
 
+    # Start the BLE scanner
+    ble_temps.start_scanner()
+
     # make initial call
     update_temp_services()
     # and then every 5 seconds
@@ -93,6 +105,7 @@ def main():
     # and then every 1 seconds
     GLib.timeout_add_seconds(1, lambda: update_current_services())
 
+    GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
     mainloop.run()

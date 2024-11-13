@@ -112,10 +112,13 @@ class TemparatureService(DbusService):
 
         self._init_settings([('TemperatureType', [0, 0, 2]), ('CustomName', [self.name, 0, 0]), ('HighTempAlarm', [70, 0, 100])])
 
-    def update(self, value):
+    def update(self, tempValue, humidityValue = None):
         super().update()
-        self.dbusservice['/Temperature'] = value
-        self.logger.debug(f"Updated temperature to {value}")
+        self.dbusservice['/Temperature'] = tempValue
+        self.logger.debug(f"Updated temperature to {tempValue}")
+        if humidityValue is not None:
+            self.dbusservice['/Humidity'] = humidityValue
+            self.logger.debug(f"Updated humidity to {humidityValue}")
 
     def disconnect(self):
         self.dbusservice['/Temperature'] = None
