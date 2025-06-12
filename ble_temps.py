@@ -40,7 +40,7 @@ class BLETemps:
         """
         # ensure that the data is at least 3 bytes long
         if len(data) < 11:
-            logging.debug(f"Data is too short: {data}")
+            self.logger.debug(f"Data is too short: {data}")
             return None
         
         index = 0
@@ -53,6 +53,7 @@ class BLETemps:
 
         # Create an instance of SensorData to store the decoded values
         sensor_data = TempSensorData()
+        sensor_data.timestamp = datetime.now()
         sensor_data.connection = 'BLE'
 
         # Iterate through the remaining bytes to extract sensor data
@@ -98,31 +99,32 @@ class BLETemps:
     async def _scanAsync(self):
         try:
             async with BleakScanner(self._scan_callback) as scanner:
+                self.logger.info('Starting scan...')
                 while not self.stop_event.is_set():
                     await asyncio.sleep(1)
-                logging.info('Starting scan...')
                 await self.stop_event.wait()    # wait for stop event
         except Exception as e:
             self.logger.error("Error during scan: %s", e)
         self.logger.info("Scanning stopped.")
 
     def _scan_callback(self, device, advertising_data):
-        try:
-            # logging.debug(f"Device {device.name} ({device.address}) RSSI: {device.rssi}")
-            if(device.address.startswith("A4:C1:38:")): # All Xiaomi Mijia LYWSD03MMC devices start with this address
-                logging.debug(f"Found Xiaomi Mijia device {device.name} ({device.address}) RSSI: {device.rssi}")
-                advertisement_data = advertising_data.service_data.get('0000fcd2-0000-1000-8000-00805f9b34fb')  # BTHome V2 service UUID
-                if not advertisement_data:
-                    return
-                logging.debug(f"BTHome V2 service found in advertisement data")
+        # logging.debug(f"Device {device.name} ({device.address}) RSSI: {device.rssi}")
+        if not device.address.startswith("A4:C1:38:"): # All Xiaomi Mijia LYWSD03MMC devices start with this address
+            return
+        self.logger.debug(f"Found Xiaomi Mijia device {device.name} ({device.address}) RSSI: {device.rssi}")
+        advertisement_data = advertising_data.service_data.get('0000fcd2-0000-1000-8000-00805f9b34fb')  # BTHome V2 service UUID
+        if not advertisement_data:
+            self.logger.warning(f"No BTHome V2 service data found in advertisement data for device {device.name}")
+            return
+        self.logger.debug(f"BTHome V2 service found in advertisement data")
 
-                sensor_data = self._parse_bthome_v2_data(advertisement_data)
-                if sensor_data:
-                    sensor_data.id = device.name
-                    with self.Lock:
-                        self.values[device.name] = sensor_data
-        except Exception as e:
-            self.logger.error(f"Error in scan callback: {e}")
+        sensor_data = self._parse_bthome_v2_data(advertisement_data)
+        if not sensor_data:
+            return
+        sensor_data.id = device.name
+        self.logger.debug(f"Device {device.name} has temperature {sensor_data.temperature} and humidity {sensor_data.humidity} at {sensor_data.timestamp}")
+        with self.Lock:
+            self.values[device.name] = sensor_data
 
     def get_values(self):
         with self.Lock:
