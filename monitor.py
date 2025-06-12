@@ -115,9 +115,9 @@ def main():
 
     # # make initial call
     # dc_currents.set_zero()
-    # update_current_services()
+    update_current_services()
     # # and then every 1 seconds
-    # GLib.timeout_add_seconds(1, lambda: update_current_services())
+    GLib.timeout_add_seconds(1, lambda: update_current_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
     mainloop.run()

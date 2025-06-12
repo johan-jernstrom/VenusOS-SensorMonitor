@@ -1,0 +1,70 @@
+import os
+import csv
+import time
+from datetime import datetime
+
+class CSVLogger:
+    def __init__(self, directory, filename="battery_log.csv", flush_interval=30):
+        if not os.path.isabs(directory):
+            directory = os.path.abspath(directory)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        self.filepath = os.path.join(directory, filename)
+        self.buffer = []
+        self.flush_interval = flush_interval
+        self.last_flush_time = time.time()
+
+        self.ensure_file()
+
+    def ensure_file(self):
+        if not os.path.exists(self.filename):
+            with open(self.filename, mode='w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "timestamp",
+                    "current",
+                    "voltage",
+                    "b1_voltage",
+                    "b1_current",
+                    "b1_smoothed",
+                    "b2_voltage",
+                    "b2_current",
+                    "b2_smoothed",
+                    "b3_voltage",
+                    "b3_current",
+                    "b3_smoothed",
+                ])
+
+    def log(self, current, voltage, 
+            b1_voltage, b1_current, b1_smoothed,
+            b2_voltage, b2_current, b2_smoothed, 
+            b3_voltage, b3_current, b3_smoothed):
+        self.buffer.append([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            round(current, 2),
+            round(voltage, 2),
+            round(b1_voltage, 2),
+            round(b1_current, 2),
+            round(b1_smoothed, 2),
+            round(b2_voltage, 2),
+            round(b2_current, 2),
+            round(b2_smoothed, 2),
+            round(b3_voltage, 2),
+            round(b3_current, 2),
+            round(b3_smoothed, 2),
+        ])
+        now = time.time()
+        if now - self.last_flush_time > self.flush_interval:
+            self.flush()
+
+    def flush(self):
+        if not self.buffer:
+            return
+        with open(self.filepath, mode='a', newline='') as f:        
+            writer = csv.writer(f)
+            writer.writerows(self.buffer)
+        self.buffer = []
+        self.last_flush_time = time.time()
+
+    def close(self):
+        self.flush()
