@@ -6,7 +6,7 @@ import adafruit_ads1x15.ads1115 as ADS # type: ignore
 from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 import logging
 import CSVLogger  # Assuming you have a CSVLogger class for logging to CSV
-
+from dbus_battery_reader import DbusBatteryReader
 class SmoothedValue:
     def __init__(self, initial_value=0, window_size=5):
         self.buffer = [initial_value] * window_size
@@ -32,6 +32,7 @@ class DcCurrents:
         self.i2cConnected = False
         self.channels = channels
         self.smoothed_values = {str(i): SmoothedValue() for i in self.channels}
+        self.batt_reader = DbusBatteryReader()
         # for i in self.channels:
         #     setattr(self, 'channel' + str(i) + 'Zero', 0)   # initialize zero values
     
@@ -73,8 +74,13 @@ class DcCurrents:
         raw_voltages = {}
         raw_currents = {}
 
-        current = 0 # TODO: Read from DBUS
-        voltage = 0 # TODO: Read from DBUS
+        # Read voltage and current from dbus
+        try:
+            batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
+        except Exception as e:
+            self.logger.error(f"dc_currents: Error reading from dbus: {e}")
+            batt_voltage = 0
+            batt_current = 0
 
         self.ensure_i2c_connected()
         if not self.i2cConnected:
@@ -86,12 +92,12 @@ class DcCurrents:
         # Read the voltage of each channel
         for i in self.channels:
             try:
-                voltage = getattr(self, 'channel' + str(i)).voltage
+                batt_voltage = getattr(self, 'channel' + str(i)).voltage
                 # voltage -= getattr(self, 'channel' + str(i) + 'Zero')
-                current = voltage * self.amp_per_voltage
-                raw_voltages[i] = voltage
-                raw_currents[i] = current
-                values[str(i)] = self.smoothed_values[str(i)].update(current)
+                batt_current = batt_voltage * self.amp_per_voltage
+                raw_voltages[i] = batt_voltage
+                raw_currents[i] = batt_current
+                values[str(i)] = self.smoothed_values[str(i)].update(batt_current)
                 
             except Exception as e:
                 self.i2cConnected = False
@@ -99,7 +105,7 @@ class DcCurrents:
                 values[str(i)] = -999
         # Log the values to CSV
         if self.csvLogger:
-            self.csvLogger.log(current, voltage,
+            self.csvLogger.log(batt_current, batt_voltage,
                                raw_voltages.get(1, -999), raw_currents.get(1, -999), values.get('1', -999),
                                raw_voltages.get(2, -999), raw_currents.get(2, -999), values.get('2', -999),
                                raw_voltages.get(3, -999), raw_currents.get(3, -999), values.get('3', -999))
