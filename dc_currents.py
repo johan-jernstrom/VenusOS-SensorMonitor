@@ -7,6 +7,7 @@ from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 import logging
 import CSVLogger  # Assuming you have a CSVLogger class for logging to CSV
 from dbus_battery_reader import DbusBatteryReader
+
 class SmoothedValue:
     def __init__(self, initial_value=0, window_size=5):
         self.buffer = [initial_value] * window_size
@@ -14,6 +15,17 @@ class SmoothedValue:
     def update(self, value):
         self.buffer.pop(0)
         self.buffer.append(value)
+
+    def set(self, value):
+        """Sets the current value and updates the buffer."""
+        self.buffer = [value] * len(self.buffer)
+
+    def get(self, default=None):
+        """Returns the average of the values in the buffer.
+        This is a simple moving average.
+        """
+        if not self.buffer:
+            return default
         return sum(self.buffer) / len(self.buffer)
 
 class DcCurrents:
@@ -28,13 +40,11 @@ class DcCurrents:
         self.logger = logging.getLogger(__name__)
         self.csvLogger = CSVLogger.CSVLogger('currentlogs', flush_interval=60)  # Log every minute
         self.logger.info("dc_currents: Initializing")
-        self.amp_per_voltage = amp_per_voltage
+        self.amp_per_ad_voltage = amp_per_voltage
         self.i2cConnected = False
         self.channels = channels
         self.smoothed_values = {str(i): SmoothedValue() for i in self.channels}
         self.batt_reader = DbusBatteryReader()
-        # for i in self.channels:
-        #     setattr(self, 'channel' + str(i) + 'Zero', 0)   # initialize zero values
     
     def ensure_i2c_connected(self):
         if self.i2cConnected:
@@ -56,22 +66,8 @@ class DcCurrents:
             self.logger.debug("dc_currents: Error initializing I2C: " + str(e))
             self.i2cConnected = False
 
-    # def set_zero(self):
-    #     self.ensure_i2c_connected()
-    #     if not self.i2cConnected:
-    #         return
-    #     try:
-    #         for i in self.channels:
-    #             voltage = getattr(self, 'channel' + str(i)).voltage
-    #             setattr(self, 'channel' + str(i) + 'Zero', voltage)
-    #             self.logger.debug("dc_currents: Channel " + str(i) + " zero set to " + str(voltage))
-    #     except Exception as e:
-    #         self.i2cConnected = False
-    #         self.logger.debug("dc_currents: Error setting zero: " + str(e))
-
     def read_currents(self):
-        values = {}
-        raw_voltages = {}
+        ads_voltages = {}
         raw_currents = {}
 
         # Read voltage and current from dbus
@@ -86,32 +82,32 @@ class DcCurrents:
         if not self.i2cConnected:
             self.logger.debug("dc_currents: I2C not initialized")
             for i in self.channels:
-                values[str(i)] = -999
-            return values
+                self.values[str(i)].set(-999)
+            return self.smoothed_values
         
         # Read the voltage of each channel
         for i in self.channels:
             try:
-                ad_voltage = getattr(self, 'channel' + str(i)).voltage
-                # ad_voltage -= getattr(self, 'channel' + str(i) + 'Zero')
-                current = ad_voltage * self.amp_per_voltage
-                raw_voltages[i] = ad_voltage
+                ads_voltage = getattr(self, 'channel' + str(i)).voltage
+                ads_voltages[i] = ads_voltage
+                current = ads_voltage * self.amp_per_ad_voltage
                 raw_currents[i] = current
-                values[str(i)] = self.smoothed_values[str(i)].update(current)
+                self.smoothed_values[str(i)].update(current)
                 
             except Exception as e:
                 self.i2cConnected = False
                 self.logger.error(f"dc_currents: Error reading channel {i}: {e}")
-                values[str(i)] = -999
+                self.smoothed_values[str(i)].set(-999)
+
         # Log the values to CSV
         if self.csvLogger:
-            self.csvLogger.log(current, ad_voltage,
-                               raw_voltages.get(1, -999), raw_currents.get(1, -999), values.get('1', -999),
-                               raw_voltages.get(2, -999), raw_currents.get(2, -999), values.get('2', -999),
-                               raw_voltages.get(3, -999), raw_currents.get(3, -999), values.get('3', -999))
+            self.csvLogger.log(batt_current, batt_voltage,
+                               ads_voltages.get(1, -999), raw_currents.get(1, -999), self.smoothed_values.get('1', -999),
+                               ads_voltages.get(2, -999), raw_currents.get(2, -999), self.smoothed_values.get('2', -999),
+                               ads_voltages.get(3, -999), raw_currents.get(3, -999), self.smoothed_values.get('3', -999))
         
         # Return the smoothed values
-        return values
+        return self.smoothed_values
 
     def __del__(self):
         if self.csvLogger:
