@@ -54,7 +54,14 @@ class DcCurrents:
         self._bg_thread.start()
     
     def ensure_i2c_connected(self):
+        if hasattr(self, '_i2c_fail_count'):
+            pass
+        else:
+            self._i2c_fail_count = 0
         if self.i2cConnected:
+            return
+        if self._i2c_fail_count >= 10:
+            self.logger.warning("dc_currents: I2C initialization failed 10 times, giving up.")
             return
         try:
             self.logger.debug("dc_currents: Initializing I2C")
@@ -69,9 +76,14 @@ class DcCurrents:
                 self.logger.info("dc_currents: Channel " + str(i) + " initialized")
 
             self.i2cConnected = True
+            self._i2c_fail_count = 0  # Reset on success
         except Exception as e:
             self.logger.exception("dc_currents: Error initializing I2C")
             self.i2cConnected = False
+            self._i2c_fail_count += 1
+            if self._i2c_fail_count > 1:
+                self.logger.warning(f"dc_currents: I2C initialization failed {self._i2c_fail_count} times.")
+            time.sleep(1)  # Delay before next retry
 
     def read_currents(self):
         ads_voltages = {}
@@ -100,11 +112,12 @@ class DcCurrents:
                 current = ads_voltage * self.amp_per_ad_voltage
                 raw_currents[i] = current
                 self.smoothed_values[str(i)].update(current)
-                
             except Exception as e:
                 self.i2cConnected = False
-                self.logger.exception(f"dc_currents: Error reading channel {i}")
+                self.logger.exception(f"dc_currents: Error reading channel {i}, disabling I2C until reinit")
                 self.smoothed_values[str(i)].set(-999)
+                # Break out of the loop to avoid hammering the I2C bus
+                break
 
         # Log the values to CSV
         if self.csvLogger:

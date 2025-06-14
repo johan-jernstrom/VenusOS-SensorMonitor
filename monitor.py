@@ -59,13 +59,13 @@ def update_current_services():
     for id in newCurrents:
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
-        current = newCurrents[id]
+        current = newCurrents[id].get()  # Get the numeric value
         if current < 1 and current > -1:    # ignore small currents
             current = 0
         currentServices[id].update(current, temp)
         if currentServices[id].settings['DiffAlarm'] == 0:
             continue    # skip diff check if alarm is disabled
-        if abs(sum(newCurrents.values())) / len(newCurrents) < 2:
+        if abs(sum([v.get() for v in newCurrents.values()])) / len(newCurrents) < 2:
             continue    # skip diff check if overall current is low
         diffPercent = calculate_diff(newCurrents, id, current)
         alarm.check_value(diffPercent, currentServices[id].settings['DiffAlarm'], id)
@@ -92,7 +92,7 @@ def create_current_service_if_not_exist(id):
     currentServices[id] = DCSourceService('I2C', id, instance)
 
 def calculate_diff(newCurrents, id, current):
-    otherCurrents = [newCurrents[x] for x in newCurrents if x != id]
+    otherCurrents = [newCurrents[x].get() for x in newCurrents if x != id]
     avgOtherCurrents = sum(otherCurrents) / len(otherCurrents) if len(otherCurrents) > 0 else 0
     diff = abs(current - avgOtherCurrents)
     diffPercent = diff / avgOtherCurrents * 100 if avgOtherCurrents != 0 else 0
@@ -126,4 +126,4 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
-    main() 
+    main()
