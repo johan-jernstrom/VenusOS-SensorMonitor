@@ -40,7 +40,8 @@ class DcCurrents:
             amp_per_voltage (float): Conversion factor from voltage to current. Default is 150A/5V.
         """
         self.logger = logging.getLogger(__name__)
-        self.csvLogger = CSVLogger.CSVLogger('currentlogs', flush_interval=60)  # Log every minute
+        log_abs_path = '/var/log/sensormonitor/dc_currents'
+        self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=60)  # Log every minute
         self.logger.info("dc_currents: Initializing")
         self.amp_per_ad_voltage = amp_per_voltage
         self.i2cConnected = False
