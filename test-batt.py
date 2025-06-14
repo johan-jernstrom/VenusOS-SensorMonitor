@@ -8,3 +8,5 @@ if __name__ == "__main__":
         print(f"Battery Current: {current:.2f} A")
     except Exception as e:
         print(f"Error reading from dbus: {e}")
+        import traceback
+        traceback.print_exc()

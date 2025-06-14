@@ -83,8 +83,7 @@ class DbusService:
                 self.settings[setting_name] = value
                 self.logger.debug(f"Updated setting {setting_name} to {value}")  
         except Exception as e:
-            traceback.print_exc()
-            self.logger.error(f"Failed to update setting {path} to {value}: {e}")
+            self.logger.exception(f"Failed to update setting {path} to {value}")
         return True # accept the change
     
     def _handle_setting_changed(self, setting, old, new):

@@ -104,7 +104,7 @@ class BLETemps:
                     await asyncio.sleep(1)
                 await self.stop_event.wait()    # wait for stop event
         except Exception as e:
-            self.logger.error("Error during scan: %s", e)
+            self.logger.exception("Error during scan")
         self.logger.info("Scanning stopped.")
 
     def _scan_callback(self, device, advertising_data):

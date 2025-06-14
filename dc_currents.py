@@ -69,7 +69,7 @@ class DcCurrents:
 
             self.i2cConnected = True
         except Exception as e:
-            self.logger.error("dc_currents: Error initializing I2C: " + str(e))
+            self.logger.exception("dc_currents: Error initializing I2C")
             self.i2cConnected = False
 
     def read_currents(self):
@@ -80,7 +80,7 @@ class DcCurrents:
         try:
             batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
         except Exception as e:
-            self.logger.error(f"dc_currents: Error reading from dbus: {e}")
+            self.logger.exception("dc_currents: Error reading from dbus")
             batt_voltage = 0
             batt_current = 0
 
@@ -102,7 +102,7 @@ class DcCurrents:
                 
             except Exception as e:
                 self.i2cConnected = False
-                self.logger.error(f"dc_currents: Error reading channel {i}: {e}")
+                self.logger.exception(f"dc_currents: Error reading channel {i}")
                 self.smoothed_values[str(i)].set(-999)
 
         # Log the values to CSV
