@@ -121,6 +121,7 @@ def main():
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
     mainloop.run()
+    dc_currents.shutdown()  # Ensure we stop the background thread properly
     logging.info('Exiting...')
 
 if __name__ == "__main__":

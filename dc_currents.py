@@ -7,9 +7,11 @@ from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 import logging
 import CSVLogger  # Assuming you have a CSVLogger class for logging to CSV
 from dbus_battery_reader import DbusBatteryReader
+import threading
+import time
 
 class SmoothedValue:
-    def __init__(self, initial_value=0, window_size=5):
+    def __init__(self, initial_value=0, window_size=10):
         self.buffer = [initial_value] * window_size
     
     def update(self, value):
@@ -45,6 +47,10 @@ class DcCurrents:
         self.channels = channels
         self.smoothed_values = {str(i): SmoothedValue() for i in self.channels}
         self.batt_reader = DbusBatteryReader()
+        self.lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._bg_thread = threading.Thread(target=self._background_reader, daemon=True)
+        self._bg_thread.start()
     
     def ensure_i2c_connected(self):
         if self.i2cConnected:
@@ -59,11 +65,11 @@ class DcCurrents:
 
             for i in self.channels:
                 setattr(self, 'channel' + str(i), AnalogIn(ads, getattr(ADS, 'P' + str(i))))
-                self.logger.debug("dc_currents: Channel " + str(i) + " initialized")
+                self.logger.info("dc_currents: Channel " + str(i) + " initialized")
 
             self.i2cConnected = True
         except Exception as e:
-            self.logger.debug("dc_currents: Error initializing I2C: " + str(e))
+            self.logger.error("dc_currents: Error initializing I2C: " + str(e))
             self.i2cConnected = False
 
     def read_currents(self):
@@ -82,7 +88,7 @@ class DcCurrents:
         if not self.i2cConnected:
             self.logger.debug("dc_currents: I2C not initialized")
             for i in self.channels:
-                self.values[str(i)].set(-999)
+                self.smoothed_values[str(i)].set(-999)
             return self.smoothed_values
         
         # Read the voltage of each channel
@@ -102,14 +108,42 @@ class DcCurrents:
         # Log the values to CSV
         if self.csvLogger:
             self.csvLogger.log(batt_current, batt_voltage,
-                               ads_voltages.get(1, -999), raw_currents.get(1, -999), self.smoothed_values.get('1', -999),
-                               ads_voltages.get(2, -999), raw_currents.get(2, -999), self.smoothed_values.get('2', -999),
-                               ads_voltages.get(3, -999), raw_currents.get(3, -999), self.smoothed_values.get('3', -999))
+                               ads_voltages.get(1, -999), raw_currents.get(1, -999), self.smoothed_values.get('1', SmoothedValue()).get(-999),
+                               ads_voltages.get(2, -999), raw_currents.get(2, -999), self.smoothed_values.get('2', SmoothedValue()).get(-999),
+                               ads_voltages.get(3, -999), raw_currents.get(3, -999), self.smoothed_values.get('3', SmoothedValue()).get(-999))
         
         # Return the smoothed values
         return self.smoothed_values
 
-    def __del__(self):
+    def _background_reader(self):
+        while not self._stop_event.is_set():
+            self._read_and_update_smoothed()
+            time.sleep(0.1)  # 100 ms
+
+    def _read_and_update_smoothed(self):
+        # This method is called from the background thread
+        with self.lock:
+            self.read_currents()
+
+    def get_latest_smoothed_values(self):
+        """
+        Thread-safe method to retrieve the latest smoothed values.
+        Returns a dict of channel:str -> smoothed_value:float
+        """
+        with self.lock:
+            return {k: v.get() for k, v in self.smoothed_values.items()}
+
+    def stop_background_thread(self):
+        self._stop_event.set()
+        if self._bg_thread.is_alive():
+            self._bg_thread.join()
+
+    def shutdown(self):
+        """
+        Cleanly stop the background thread and flush the CSV logger.
+        Call this method explicitly when you are done with the DcCurrents instance.
+        """
+        self.stop_background_thread()
         if self.csvLogger:
             self.csvLogger.flush()
             self.logger.info("dc_currents: CSV logger flushed")
