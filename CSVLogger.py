@@ -4,21 +4,19 @@ import time
 from datetime import datetime
 
 class CSVLogger:
-    def __init__(self, directory, filename="battery_log.csv", flush_interval=30):
+    def __init__(self, directory, flush_interval=30):
         if not os.path.isabs(directory):
             directory = os.path.abspath(directory)
         if not os.path.exists(directory):
             os.makedirs(directory)
-        self.filepath = os.path.join(directory, filename)
+        self.directory = directory
         self.buffer = []
         self.flush_interval = flush_interval
         self.last_flush_time = time.time()
 
-        self.ensure_file()
-
-    def ensure_file(self):
-        if not os.path.exists(self.filename):
-            with open(self.filename, mode='w', newline='') as f:
+    def ensure_file(self, filepath):
+        if not os.path.exists(filepath):
+            with open(filepath, mode='w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "timestamp",
@@ -60,7 +58,11 @@ class CSVLogger:
     def flush(self):
         if not self.buffer:
             return
-        with open(self.filepath, mode='a', newline='') as f:        
+        current_date = datetime.now().strftime("%Y%m%d")
+        filename = 'dc_currents_' + current_date + '.csv'
+        filepath = os.path.join(self.directory, filename)
+        self.ensure_file(filepath)
+        with open(filepath, mode='a', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(self.buffer)
         self.buffer = []

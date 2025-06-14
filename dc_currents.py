@@ -6,7 +6,7 @@ import adafruit_ads1x15.ads1115 as ADS # type: ignore
 from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
 import logging
 import CSVLogger  # Assuming you have a CSVLogger class for logging to CSV
-
+from dbus_battery_reader import DbusBatteryReader
 class SmoothedValue:
     def __init__(self, initial_value=0, window_size=5):
         self.buffer = [initial_value] * window_size
@@ -26,12 +26,13 @@ class DcCurrents:
             amp_per_voltage (float): Conversion factor from voltage to current. Default is 150A/5V.
         """
         self.logger = logging.getLogger(__name__)
-        self.csvLogger = CSVLogger.CSVLogger('logs', 'dc_currents_log_' + datetime.now().strftime("%Y%m%d") + '.csv', flush_interval=60)  # Log every minute
+        self.csvLogger = CSVLogger.CSVLogger('currentlogs', flush_interval=60)  # Log every minute
         self.logger.info("dc_currents: Initializing")
         self.amp_per_voltage = amp_per_voltage
         self.i2cConnected = False
         self.channels = channels
         self.smoothed_values = {str(i): SmoothedValue() for i in self.channels}
+        self.batt_reader = DbusBatteryReader()
         # for i in self.channels:
         #     setattr(self, 'channel' + str(i) + 'Zero', 0)   # initialize zero values
     
@@ -73,8 +74,13 @@ class DcCurrents:
         raw_voltages = {}
         raw_currents = {}
 
-        current = 0 # TODO: Read from DBUS
-        ad_voltage = 0 # TODO: Read from DBUS
+        # Read voltage and current from dbus
+        try:
+            batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
+        except Exception as e:
+            self.logger.error(f"dc_currents: Error reading from dbus: {e}")
+            batt_voltage = 0
+            batt_current = 0
 
         self.ensure_i2c_connected()
         if not self.i2cConnected:
