@@ -74,7 +74,7 @@ class DcCurrents:
         raw_currents = {}
 
         current = 0 # TODO: Read from DBUS
-        voltage = 0 # TODO: Read from DBUS
+        ad_voltage = 0 # TODO: Read from DBUS
 
         self.ensure_i2c_connected()
         if not self.i2cConnected:
@@ -86,10 +86,10 @@ class DcCurrents:
         # Read the voltage of each channel
         for i in self.channels:
             try:
-                voltage = getattr(self, 'channel' + str(i)).voltage
-                # voltage -= getattr(self, 'channel' + str(i) + 'Zero')
-                current = voltage * self.amp_per_voltage
-                raw_voltages[i] = voltage
+                ad_voltage = getattr(self, 'channel' + str(i)).voltage
+                # ad_voltage -= getattr(self, 'channel' + str(i) + 'Zero')
+                current = ad_voltage * self.amp_per_voltage
+                raw_voltages[i] = ad_voltage
                 raw_currents[i] = current
                 values[str(i)] = self.smoothed_values[str(i)].update(current)
                 
@@ -99,10 +99,15 @@ class DcCurrents:
                 values[str(i)] = -999
         # Log the values to CSV
         if self.csvLogger:
-            self.csvLogger.log(current, voltage,
+            self.csvLogger.log(current, ad_voltage,
                                raw_voltages.get(1, -999), raw_currents.get(1, -999), values.get('1', -999),
                                raw_voltages.get(2, -999), raw_currents.get(2, -999), values.get('2', -999),
                                raw_voltages.get(3, -999), raw_currents.get(3, -999), values.get('3', -999))
         
         # Return the smoothed values
         return values
+
+    def __del__(self):
+        if self.csvLogger:
+            self.csvLogger.flush()
+            self.logger.info("dc_currents: CSV logger flushed")
