@@ -55,7 +55,7 @@ def create_temp_service_if_not_exists(sensorData):
         tempServices[id] = TemparatureService(sensorData.connection, sensorData.id, instance)
 
 def update_current_services():
-    newCurrents = dc_currents.read_currents()
+    newCurrents = dc_currents.get_latest_smoothed_values()  # Get the latest smoothed values from the dc_currents instance
     for id in newCurrents:
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
