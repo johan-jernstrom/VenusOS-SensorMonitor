@@ -11,10 +11,25 @@ import threading
 import time
 
 class SmoothedValue:
+    """
+    A class to maintain a smoothed value over a sliding window.
+    It keeps track of the last N values and the quality of the value defined as the percentage of non-None values in the window.
+    """
+
     def __init__(self, initial_value=0, window_size=10):
         self.buffer = [initial_value] * window_size
+        self.quality = [0] * window_size  # Quality of each value, 0-100
     
     def update(self, value):
+        """Updates the buffer with a new value, removing the oldest value.
+        If the value is None, the value is not added to the buffer, and the quality is decreased.
+        """
+        if value is None:
+            self.quality.pop(0)
+            self.quality.append(0)  # Append a quality of 0 for None values
+            return
+        self.quality.pop(0)
+        self.quality.append(100)  # Assume new value has full quality
         self.buffer.pop(0)
         self.buffer.append(value)
 
@@ -29,6 +44,14 @@ class SmoothedValue:
         if not self.buffer:
             return default
         return sum(self.buffer) / len(self.buffer)
+    
+    def get_quality(self):
+        """Returns the percentage quality of the values in the buffer.
+        The quality is calculated as the average of the quality values in the buffer.
+        """
+        if not self.quality:
+            return 0
+        return sum(self.quality) / len(self.quality)
 
 class DcCurrents:
     def __init__(self, channels = [1,2,3], amp_per_voltage = 150 / 5):
@@ -40,7 +63,7 @@ class DcCurrents:
             amp_per_voltage (float): Conversion factor from voltage to current. Default is 150A/5V.
         """
         self.logger = logging.getLogger(__name__)
-        log_abs_path = '/var/log/sensormonitor/dc_currents'
+        log_abs_path = '/data/VenusOS-SensorMonitor/logs/dc_currents'
         self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=60)  # Log every minute
         self.logger.info("dc_currents: Initializing")
         self.amp_per_ad_voltage = amp_per_voltage
@@ -89,20 +112,21 @@ class DcCurrents:
         ads_voltages = {}
         raw_currents = {}
 
+        self.ensure_i2c_connected()
+        if not self.i2cConnected:
+            self.logger.debug("dc_currents: I2C not initialized, waiting 1 second before retrying")
+            for i in self.channels:
+                self.smoothed_values[str(i)].update(None)
+            # sleep to avoid busy-waiting
+            time.sleep(1)
+            return
+        
         # Read voltage and current from dbus
         try:
             batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
         except Exception as e:
-            self.logger.exception("dc_currents: Error reading from dbus")
-            batt_voltage = 0
-            batt_current = 0
-
-        self.ensure_i2c_connected()
-        if not self.i2cConnected:
-            self.logger.debug("dc_currents: I2C not initialized")
-            for i in self.channels:
-                self.smoothed_values[str(i)].set(-999)
-            return self.smoothed_values
+            self.logger.exception("dc_currents: Error reading from dbus. ")
+            raise
         
         # Read the voltage of each channel
         for i in self.channels:
@@ -114,10 +138,8 @@ class DcCurrents:
                 self.smoothed_values[str(i)].update(current)
             except Exception as e:
                 self.i2cConnected = False
-                self.logger.exception(f"dc_currents: Error reading channel {i}, disabling I2C until reinit")
-                self.smoothed_values[str(i)].set(-999)
-                # Break out of the loop to avoid hammering the I2C bus
-                break
+                self.logger.exception(f"dc_currents: Error reading channel {i}")
+                self.smoothed_values[str(i)].update(None)
 
         # Log the values to CSV
         if self.csvLogger:
@@ -125,9 +147,6 @@ class DcCurrents:
                                ads_voltages.get(1, -999), raw_currents.get(1, -999), self.smoothed_values.get('1', SmoothedValue()).get(-999),
                                ads_voltages.get(2, -999), raw_currents.get(2, -999), self.smoothed_values.get('2', SmoothedValue()).get(-999),
                                ads_voltages.get(3, -999), raw_currents.get(3, -999), self.smoothed_values.get('3', SmoothedValue()).get(-999))
-        
-        # Return the smoothed values
-        return self.smoothed_values
 
     def _background_reader(self):
         while not self._stop_event.is_set():
