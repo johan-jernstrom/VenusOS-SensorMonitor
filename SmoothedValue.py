@@ -31,6 +31,10 @@ class SmoothedValue:
         """
         if not self.buffer:
             return default
+        
+        if self.get_quality()< 50:
+            # If the quality is below 50%, return the default value
+            return default
         return sum(self.buffer) / len(self.buffer)
 
     def get_quality(self):
