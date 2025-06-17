@@ -7,9 +7,7 @@ from w1_temps import W1Temps
 from ble_temps import BLETemps
 from dc_currents import DcCurrents
 from alarm import AlarmBuzzer
-from dbus_service import DCSourceService, TemparatureService
-from TempSensorData import TempSensorData
-from SmoothedCurrent import SmoothedCurrent
+from dbus_service import DCSourceService, TemperatureService
 
 # Create a dictionary to keep track of the services that are currently active, one for temperature services and one for current services
 tempServices = {}
@@ -53,7 +51,7 @@ def create_temp_service_if_not_exists(sensorData):
     id = sensorData.id
     if id not in tempServices:
         instance = 1000 + len(tempServices)
-        tempServices[id] = TemparatureService(sensorData.connection, sensorData.id, instance)
+        tempServices[id] = TemperatureService(sensorData.connection, sensorData.id, instance)
 
 def update_current_services():
     latestSmoothedCurrents = dc_currents.get_latest_smoothed_values()  # Get the latest smoothed values from the dc_currents instance

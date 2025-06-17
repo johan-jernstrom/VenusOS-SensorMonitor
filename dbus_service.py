@@ -102,7 +102,7 @@ class DbusService:
             self.dbusservice['/Connected'] = 1
             self.logger.info(f"Reconnecting service {self.servicename}")
     
-class TemparatureService(DbusService):
+class TemperatureService(DbusService):
     def __init__(self, connection, id, deviceInstance):
         super().__init__('temperature', connection, id, deviceInstance)
 
