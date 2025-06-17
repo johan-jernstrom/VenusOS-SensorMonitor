@@ -63,7 +63,8 @@ class DcCurrents:
         if self.i2cConnected:
             return
         if self._i2c_fail_count >= self.I2C_RETRY_LIMIT:
-            self.logger.warning(f"dc_currents: I2C initialization failed {self.I2C_RETRY_LIMIT} times, giving up.")
+            self.logger.error("dc_currents: I2C initialization failed too many times (" + str(self._i2c_fail_count) + "), stopping background thread.")
+            self.shutdown()  # Clean up resources
             return
         try:
             self.logger.debug("dc_currents: Initializing I2C")
@@ -104,7 +105,7 @@ class DcCurrents:
         try:
             batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
         except Exception as e:
-            self.logger.exception("dc_currents: Error reading from dbus. ")
+            self.logger.exception("dc_currents: Error reading battery voltage and current from dbus")
             raise
         
         # Read the voltage of each channel
