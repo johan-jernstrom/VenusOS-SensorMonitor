@@ -41,7 +41,7 @@ def update_temp_services():
         alarm.check_value(data.temperature, service.settings['HighTempAlarm'], id)
 
     # disconnect services that are no longer available by checking if the id is in the newTemps dictionary
-    for id in tempServices:
+    for id in list(tempServices):
         if id not in newTemps:
             tempServices[id].disconnect()
     
