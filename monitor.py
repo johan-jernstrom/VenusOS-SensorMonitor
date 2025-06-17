@@ -59,7 +59,7 @@ def update_current_services():
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
         current = latestSmoothedCurrents[id].get_value()  # Get the numeric value
-        if current < 1 and current > -1:    # ignore small currents
+        if abs(current) < 1:    # ignore small currents
             current = 0
         currentServices[id].update(current, temp)
 
