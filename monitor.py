@@ -113,7 +113,6 @@ def main():
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
     # # make initial call
-    # dc_currents.set_zero()
     update_current_services()
     # # and then every 1 seconds
     GLib.timeout_add_seconds(1, lambda: update_current_services())
