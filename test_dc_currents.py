@@ -4,15 +4,18 @@ import time
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
-    print("Initializing DcCurrents for manual test...")
-    dc = DcCurrents()
+    
+    dc_currents = DcCurrents()
+    logging.info("DcCurrents initialized. Starting to read smoothed values...")
     try:
-        for i in range(10):
-            print(f"\n--- Read {i+1} ---")
-            smoothed = dc.read_currents()
-            for ch, val in smoothed.items():
-                print(f"Channel {ch}: {val.get():.2f} A (smoothed)")
-            time.sleep(1)
+        while True:
+            smoothed_values = dc_currents.get_latest_smoothed_values()
+            logging.info(f"Smoothed Values: {smoothed_values}")
+            time.sleep(1)  # Adjust the sleep time as needed
+    except KeyboardInterrupt:
+        logging.info("Stopping DcCurrents...")
+    except Exception as e:
+        logging.exception("An error occurred in DcCurrents: %s", e)
     finally:
-        dc.shutdown()
-        print("Shutdown complete.")
+        dc_currents.shutdown()
+        logging.info("DcCurrents shutdown complete.")
