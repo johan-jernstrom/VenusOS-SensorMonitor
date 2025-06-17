@@ -1,4 +1,3 @@
-import datetime
 from SmoothedValue import SmoothedValue
 import board
 import busio
@@ -12,22 +11,44 @@ import threading
 import time
 
 class DcCurrents:
-    def __init__(self, channels = [1,2,3], amp_per_voltage = 150 / 5):
+    DEFAULT_CHANNELS = [1, 2, 3]
+    DEFAULT_AMP_PER_VOLTAGE = 30.0  # 150A/5V
+    DEFAULT_LOG_PATH = '/data/VenusOS-SensorMonitor/logs/dc_currents'
+    DEFAULT_FLUSH_INTERVAL = 60  # seconds
+    DEFAULT_SMOOTHED_WINDOW = 10  # Default window size for SmoothedValue
+    DEFAULT_OFFSETS = {1: 1.453, 2: -0.847, 3: 0.008}  # Default offsets (in Amps) for each channel
+    I2C_RETRY_LIMIT = 10
+    ERROR_VALUE = -999
+
+    def __init__(self, 
+                 channels: list = None, 
+                 amp_per_voltage: float = None, 
+                 log_abs_path: str = None, 
+                 flush_interval: int = None,
+                 smoothed_window: int = None,
+                 offsets: dict = None):
         """
         Initializes the DcCurrents class to read DC currents from specified channels.
 
         Args:
             channels (list): List of channels to read from. Default is [1, 2, 3]. Channel 0 is not used in current wiring
             amp_per_voltage (float): Conversion factor from voltage to current. Default is 150A/5V.
+            log_abs_path (str): Path for CSV logs. Default is '/data/VenusOS-SensorMonitor/logs/dc_currents'.
+            flush_interval (int): CSV log flush interval in seconds. Default is 60.
+            smoothed_window (int): Window size for SmoothedValue. Default is 10.
+            offsets (dict): Per-channel offsets to be applied to currents. Default is {1: +1.453, 2: -0.847, 3: +0.008}.
         """
         self.logger = logging.getLogger(__name__)
-        log_abs_path = '/data/VenusOS-SensorMonitor/logs/dc_currents'
-        self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=60)  # Log every minute
         self.logger.info("dc_currents: Initializing")
-        self.amp_per_ad_voltage = amp_per_voltage
+        self.channels = channels if channels is not None else self.DEFAULT_CHANNELS
+        self.amp_per_ad_voltage = amp_per_voltage if amp_per_voltage is not None else self.DEFAULT_AMP_PER_VOLTAGE
+        log_abs_path = log_abs_path if log_abs_path is not None else self.DEFAULT_LOG_PATH
+        flush_interval = flush_interval if flush_interval is not None else self.DEFAULT_FLUSH_INTERVAL
+        smoothed_window = smoothed_window if smoothed_window is not None else self.DEFAULT_SMOOTHED_WINDOW
+        self.offsets = offsets if offsets is not None else self.DEFAULT_OFFSETS.copy()
+        self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=flush_interval)
         self.i2cConnected = False
-        self.channels = channels
-        self.smoothed_values = {str(i): SmoothedValue() for i in self.channels}
+        self.smoothed_values = {str(i): SmoothedValue(window=smoothed_window) for i in self.channels}
         self.batt_reader = DbusBatteryReader()
         self.lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -41,8 +62,8 @@ class DcCurrents:
             self._i2c_fail_count = 0
         if self.i2cConnected:
             return
-        if self._i2c_fail_count >= 10:
-            self.logger.warning("dc_currents: I2C initialization failed 10 times, giving up.")
+        if self._i2c_fail_count >= self.I2C_RETRY_LIMIT:
+            self.logger.warning(f"dc_currents: I2C initialization failed {self.I2C_RETRY_LIMIT} times, giving up.")
             return
         try:
             self.logger.debug("dc_currents: Initializing I2C")
@@ -92,8 +113,10 @@ class DcCurrents:
                 ads_voltage = getattr(self, 'channel' + str(i)).voltage
                 ads_voltages[i] = ads_voltage
                 current = ads_voltage * self.amp_per_ad_voltage
-                raw_currents[i] = current
-                self.smoothed_values[str(i)].update(current)
+                offset = self.offsets.get(i, 0.0)
+                current_with_offset = current + offset
+                raw_currents[i] = current_with_offset
+                self.smoothed_values[str(i)].update(current_with_offset)
             except Exception as e:
                 self.i2cConnected = False
                 self.logger.exception(f"dc_currents: Error reading channel {i}")
@@ -102,9 +125,9 @@ class DcCurrents:
         # Log the values to CSV
         if self.csvLogger:
             self.csvLogger.log(batt_current, batt_voltage,
-                               ads_voltages.get(1, -999), raw_currents.get(1, -999), self.smoothed_values.get('1', SmoothedValue()).get(-999),
-                               ads_voltages.get(2, -999), raw_currents.get(2, -999), self.smoothed_values.get('2', SmoothedValue()).get(-999),
-                               ads_voltages.get(3, -999), raw_currents.get(3, -999), self.smoothed_values.get('3', SmoothedValue()).get(-999))
+                               ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedValue()).get(self.ERROR_VALUE),
+                               ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedValue()).get(self.ERROR_VALUE),
+                               ads_voltages.get(3, self.ERROR_VALUE), raw_currents.get(3, self.ERROR_VALUE), self.smoothed_values.get('3', SmoothedValue()).get(self.ERROR_VALUE))
 
     def _background_reader(self):
         while not self._stop_event.is_set():
