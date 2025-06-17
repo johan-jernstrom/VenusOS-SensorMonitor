@@ -1,4 +1,4 @@
-from SmoothedValue import SmoothedValue
+from SmoothedCurrent import SmoothedCurrent
 import board
 import busio
 # https://docs.circuitpython.org/projects/ads1x15/en/latest/index.html
@@ -11,8 +11,8 @@ import threading
 import time
 
 class DcCurrents:
-    DEFAULT_CHANNELS = [1, 2, 3]
-    DEFAULT_AMP_PER_VOLTAGE = 30.0  # 150A/5V
+    DEFAULT_CHANNELS = [1, 2, 3] # Channels 0 is not used in current wiring
+    DEFAULT_AMP_PER_VOLTAGE = 22  # theoretically 150A/5V=30A/V, but we use 22A/V since it turns out to be more accurate in practice
     DEFAULT_LOG_PATH = '/data/VenusOS-SensorMonitor/logs/dc_currents'
     DEFAULT_FLUSH_INTERVAL = 60  # seconds
     DEFAULT_SMOOTHED_WINDOW = 10  # Default window size for SmoothedValue
@@ -32,11 +32,11 @@ class DcCurrents:
 
         Args:
             channels (list): List of channels to read from. Default is [1, 2, 3]. Channel 0 is not used in current wiring
-            amp_per_voltage (float): Conversion factor from voltage to current. Default is 150A/5V.
+            amp_per_voltage (float): Conversion factor from voltage to current. Default is 22 from practical calibration.
             log_abs_path (str): Path for CSV logs. Default is '/data/VenusOS-SensorMonitor/logs/dc_currents'.
             flush_interval (int): CSV log flush interval in seconds. Default is 60.
             smoothed_window (int): Window size for SmoothedValue. Default is 10.
-            offsets (dict): Per-channel offsets to be applied to currents. Default is {1: +1.453, 2: -0.847, 3: +0.008}.
+            offsets (dict): Per-channel offsets to be applied to currents. Default is {1: +1.453, 2: -0.847, 3: +0.008} from practical calibration.
         """
         self.logger = logging.getLogger(__name__)
         self.logger.info("dc_currents: Initializing")
@@ -48,7 +48,7 @@ class DcCurrents:
         self.offsets = offsets if offsets is not None else self.DEFAULT_OFFSETS.copy()
         self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=flush_interval)
         self.i2cConnected = False
-        self.smoothed_values = {str(i): SmoothedValue(window=smoothed_window) for i in self.channels}
+        self.smoothed_values = {str(i): SmoothedCurrent(window=smoothed_window) for i in self.channels}
         self.batt_reader = DbusBatteryReader()
         self.lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -107,8 +107,8 @@ class DcCurrents:
         except Exception as e:
             self.logger.exception("dc_currents: Error reading battery voltage and current from dbus")
             raise
-        
-        # Read the voltage of each channel
+        # Set baseline current as battery current divided by number of channels
+        baseline = batt_current / len(self.channels) if len(self.channels) > 0 else batt_current
         for i in self.channels:
             try:
                 ads_voltage = getattr(self, 'channel' + str(i)).voltage
@@ -117,18 +117,17 @@ class DcCurrents:
                 offset = self.offsets.get(i, 0.0)
                 current_with_offset = current + offset
                 raw_currents[i] = current_with_offset
-                self.smoothed_values[str(i)].update(current_with_offset)
+                self.smoothed_values[str(i)].update(current_with_offset, baseline, batt_voltage)
             except Exception as e:
                 self.i2cConnected = False
                 self.logger.exception(f"dc_currents: Error reading channel {i}")
-                self.smoothed_values[str(i)].update(None)
-
+                self.smoothed_values[str(i)].update(None, baseline, batt_voltage)
         # Log the values to CSV
         if self.csvLogger:
             self.csvLogger.log(batt_current, batt_voltage,
-                               ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedValue()).get(self.ERROR_VALUE),
-                               ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedValue()).get(self.ERROR_VALUE),
-                               ads_voltages.get(3, self.ERROR_VALUE), raw_currents.get(3, self.ERROR_VALUE), self.smoothed_values.get('3', SmoothedValue()).get(self.ERROR_VALUE))
+                               ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedCurrent()).get_value(self.ERROR_VALUE),
+                               ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedCurrent()).get_value(self.ERROR_VALUE),
+                               ads_voltages.get(3, self.ERROR_VALUE), raw_currents.get(3, self.ERROR_VALUE), self.smoothed_values.get('3', SmoothedCurrent()).get_value(self.ERROR_VALUE))
 
     def _background_reader(self):
         while not self._stop_event.is_set():
@@ -146,7 +145,7 @@ class DcCurrents:
         Returns a dict of channel:str -> smoothed_value:float
         """
         with self.lock:
-            return {k: v.get() for k, v in self.smoothed_values.items()}
+            return {k: v.get_value() for k, v in self.smoothed_values.items()}
 
     def stop_background_thread(self):
         self._stop_event.set()

@@ -9,6 +9,7 @@ from dc_currents import DcCurrents
 from alarm import AlarmBuzzer
 from dbus_service import DCSourceService, TemparatureService
 from TempSensorData import TempSensorData
+from SmoothedCurrent import SmoothedCurrent
 
 # Create a dictionary to keep track of the services that are currently active, one for temperature services and one for current services
 tempServices = {}
@@ -55,24 +56,32 @@ def create_temp_service_if_not_exists(sensorData):
         tempServices[id] = TemparatureService(sensorData.connection, sensorData.id, instance)
 
 def update_current_services():
-    newCurrents = dc_currents.get_latest_smoothed_values()  # Get the latest smoothed values from the dc_currents instance
-    for id in newCurrents:
+    latestSmoothedCurrents = dc_currents.get_latest_smoothed_values()  # Get the latest smoothed values from the dc_currents instance
+    for id in latestSmoothedCurrents:
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
-        current = newCurrents[id].get()  # Get the numeric value
+        current = latestSmoothedCurrents[id].get_value()  # Get the numeric value
         if current < 1 and current > -1:    # ignore small currents
             current = 0
         currentServices[id].update(current, temp)
-        if currentServices[id].settings['DiffAlarm'] == 0:
+
+        # Anomaly detection: trigger alarm if difference > 50% of baseline
+        if currentServices[id].settings.get('DiffAlarm', 0) == 0:
             continue    # skip diff check if alarm is disabled
-        if abs(sum([v.get() for v in newCurrents.values()])) / len(newCurrents) < 2:
-            continue    # skip diff check if overall current is low
-        diffPercent = calculate_diff(newCurrents, id, current)
+        baseline = latestSmoothedCurrents[id].get_baseline_current() if latestSmoothedCurrents[id].get_baseline_current() is not None else 0
+
+        if baseline is None or baseline < 2:  # if baseline is None or too low, skip diff check
+            if abs(current) > 3 :  # unless current is actually high, then trigger alarm
+                alarm.check_value(100, currentServices[id].settings['DiffAlarm'], id)
+            logging.debug(f"Skipping diff check for id {id} because baseline is None or too low: {baseline}")
+            continue
+
+        diffPercent = abs((current - baseline) / baseline) * 100
         alarm.check_value(diffPercent, currentServices[id].settings['DiffAlarm'], id)
 
     # disconnect services that are no longer available
-    for id in currentServices:
-        if id not in newCurrents:
+    for id in list(currentServices):
+        if id not in latestSmoothedCurrents:
             currentServices[id].disconnect()
     
     return True
@@ -90,14 +99,6 @@ def create_current_service_if_not_exist(id):
         return
     instance = 2000 + len(currentServices)
     currentServices[id] = DCSourceService('I2C', id, instance)
-
-def calculate_diff(newCurrents, id, current):
-    otherCurrents = [newCurrents[x].get() for x in newCurrents if x != id]
-    avgOtherCurrents = sum(otherCurrents) / len(otherCurrents) if len(otherCurrents) > 0 else 0
-    diff = abs(current - avgOtherCurrents)
-    diffPercent = diff / avgOtherCurrents * 100 if avgOtherCurrents != 0 else 0
-    logging.debug(f"Id: {id}, Current: {current}, Other currents: {otherCurrents}, Diff: {diff}, DiffPercent: {diffPercent}")
-    return diffPercent
 
 def main():
     # Have a mainloop, so we can send/receive asynchronous calls to and from dbus
