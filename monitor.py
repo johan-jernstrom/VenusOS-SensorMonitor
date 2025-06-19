@@ -58,14 +58,15 @@ def update_current_services():
     for id in latestSmoothedCurrents:
         create_current_service_if_not_exist(id)
         temp = find_temp_for_current(id)
-        current = latestSmoothedCurrents[id].get_value()  # Get the numeric value
-        if abs(current) < 1:    # ignore small currents
+        current = latestSmoothedCurrents[id].get_value()  # Get the latest smoothed current value
+        if current is None or abs(current) < 1:    # ignore small currents
             current = 0
         currentServices[id].update(current, temp)
 
         # Anomaly detection: trigger alarm if difference > 50% of baseline
-        if currentServices[id].settings.get('DiffAlarm', 0) == 0:
+        if currentServices[id].settings['DiffAlarm'] == 0:
             continue    # skip diff check if alarm is disabled
+        # For baseline and other SmoothedCurrent methods, use dc_currents.smoothed_values
         baseline = latestSmoothedCurrents[id].get_baseline_current() if latestSmoothedCurrents[id].get_baseline_current() is not None else 0
 
         if baseline is None or baseline < 2:  # if baseline is None or too low, skip diff check

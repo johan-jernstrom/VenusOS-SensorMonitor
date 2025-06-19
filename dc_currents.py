@@ -1,4 +1,5 @@
 from SmoothedCurrent import SmoothedCurrent
+import copy
 import board
 import busio
 # https://docs.circuitpython.org/projects/ads1x15/en/latest/index.html
@@ -48,7 +49,7 @@ class DcCurrents:
         self.offsets = offsets if offsets is not None else self.DEFAULT_OFFSETS.copy()
         self.csvLogger = CSVLogger.CSVLogger(log_abs_path, flush_interval=flush_interval)
         self.i2cConnected = False
-        self.smoothed_values = {str(i): SmoothedCurrent(window=smoothed_window) for i in self.channels}
+        self.smoothed_values = {str(i): SmoothedCurrent(window_size=smoothed_window) for i in self.channels}
         self.batt_reader = DbusBatteryReader()
         self.lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -141,11 +142,10 @@ class DcCurrents:
 
     def get_latest_smoothed_values(self):
         """
-        Thread-safe method to retrieve the latest smoothed values.
-        Returns a dict of channel:str -> smoothed_value:float
+        Thread-safe method to retrieve the latest smoothed current.
         """
         with self.lock:
-            return {k: v.get_value() for k, v in self.smoothed_values.items()}
+            return copy.deepcopy(self.smoothed_values)
 
     def stop_background_thread(self):
         self._stop_event.set()
