@@ -7,7 +7,6 @@ import logging
 class CSVLogger:
     def __init__(self, directory, flush_interval=30):
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Initializing CSVLogger")
         if not os.path.isabs(directory):
             directory = os.path.abspath(directory)
         if not os.path.exists(directory):

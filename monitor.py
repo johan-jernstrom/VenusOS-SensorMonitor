@@ -14,6 +14,7 @@ tempServices = {}
 currentServices = {}
 
 # Create the sensors that will be monitored and exposed to dbus
+logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
 cpu_temp = CPUTemp()
 w1_temps = W1Temps()
 ble_temps = BLETemps()
@@ -113,9 +114,9 @@ def main():
     # and then every 5 seconds
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
-    # # make initial call
-    update_current_services()
-    # # and then every 1 seconds
+    # Start the DC currents background thread
+    dc_currents.start_background_thread()  # Start the background thread for reading currents
+    # and then every second
     GLib.timeout_add_seconds(1, lambda: update_current_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
@@ -124,5 +125,4 @@ def main():
     logging.info('Exiting...')
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
     main()

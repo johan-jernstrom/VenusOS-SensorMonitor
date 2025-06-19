@@ -40,7 +40,7 @@ class DcCurrents:
             offsets (dict): Per-channel offsets to be applied to currents. Default is {1: +1.453, 2: -0.847, 3: +0.008} from practical calibration.
         """
         self.logger = logging.getLogger(__name__)
-        self.logger.info("dc_currents: Initializing")
+        self.logger.info("Initializing")
         self.channels = channels if channels is not None else self.DEFAULT_CHANNELS
         self.amp_per_ad_voltage = amp_per_voltage if amp_per_voltage is not None else self.DEFAULT_AMP_PER_VOLTAGE
         log_abs_path = log_abs_path if log_abs_path is not None else self.DEFAULT_LOG_PATH
@@ -54,8 +54,18 @@ class DcCurrents:
         self.lock = threading.Lock()
         self._stop_event = threading.Event()
         self._bg_thread = threading.Thread(target=self._background_reader, daemon=True)
-        self._bg_thread.start()
-    
+
+    def start_background_thread(self):
+        """
+        Starts the background thread to read currents.
+        This method should be called after initializing the DcCurrents instance.
+        """
+        if not self._bg_thread.is_alive():
+            self._bg_thread.start()
+            self.logger.info("Background thread started")
+        else:
+            self.logger.warning("Background thread is already running")
+
     def ensure_i2c_connected(self):
         if hasattr(self, '_i2c_fail_count'):
             pass
@@ -64,11 +74,11 @@ class DcCurrents:
         if self.i2cConnected:
             return
         if self._i2c_fail_count >= self.I2C_RETRY_LIMIT:
-            self.logger.error("dc_currents: I2C initialization failed too many times (" + str(self._i2c_fail_count) + "), stopping background thread.")
+            self.logger.error("I2C initialization failed too many times (" + str(self._i2c_fail_count) + "), stopping background thread.")
             self.shutdown()  # Clean up resources
             return
         try:
-            self.logger.debug("dc_currents: Initializing I2C")
+            self.logger.debug("Initializing I2C")
             # Initialize the I2C interface
             i2c = busio.I2C(board.SCL, board.SDA)
             
@@ -77,16 +87,16 @@ class DcCurrents:
 
             for i in self.channels:
                 setattr(self, 'channel' + str(i), AnalogIn(ads, getattr(ADS, 'P' + str(i))))
-                self.logger.info("dc_currents: Channel " + str(i) + " initialized")
+                self.logger.debug("Channel " + str(i) + " initialized")
 
             self.i2cConnected = True
             self._i2c_fail_count = 0  # Reset on success
         except Exception as e:
-            self.logger.exception("dc_currents: Error initializing I2C")
+            self.logger.exception("Error initializing I2C")
             self.i2cConnected = False
             self._i2c_fail_count += 1
             if self._i2c_fail_count > 1:
-                self.logger.warning(f"dc_currents: I2C initialization failed {self._i2c_fail_count} times.")
+                self.logger.warning(f"I2C initialization failed {self._i2c_fail_count} times.")
             time.sleep(1)  # Delay before next retry
 
     def read_currents(self):
@@ -95,7 +105,7 @@ class DcCurrents:
 
         self.ensure_i2c_connected()
         if not self.i2cConnected:
-            self.logger.debug("dc_currents: I2C not initialized, waiting 1 second before retrying")
+            self.logger.debug("I2C not initialized, waiting 1 second before retrying")
             for i in self.channels:
                 self.smoothed_values[str(i)].update(None)
             # sleep to avoid busy-waiting
@@ -106,7 +116,7 @@ class DcCurrents:
         try:
             batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
         except Exception as e:
-            self.logger.exception("dc_currents: Error reading battery voltage and current from dbus")
+            self.logger.exception("Error reading battery voltage and current from dbus")
             raise
         # Set baseline current as battery current divided by number of channels
         baseline = batt_current / len(self.channels) if len(self.channels) > 0 else batt_current
@@ -121,10 +131,19 @@ class DcCurrents:
                 self.smoothed_values[str(i)].update(current_with_offset, baseline, batt_voltage)
             except Exception as e:
                 self.i2cConnected = False
-                self.logger.exception(f"dc_currents: Error reading channel {i}")
+                # self.logger.exception(f"Error reading channel {i}")
+                self.logger.debug(f"Error reading channel {i}, setting smoothed value to None") # happens often, so just log it as debug
                 self.smoothed_values[str(i)].update(None, baseline, batt_voltage)
-        # Log the values to CSV
-        if self.csvLogger:
+        
+        # Log the battery voltage and current
+        # self.logger.debug(f"Battery Voltage: {batt_voltage} V, "
+        #                  f"Battery Current: {batt_current} A, "
+        #                  f"Channel 1 Smoothed Current: {self.smoothed_values.get('1', SmoothedCurrent()).get_value(self.ERROR_VALUE)} A ({self.smoothed_values.get('1', SmoothedCurrent()).get_quality()} %), "
+        #                  f"Channel 2 Smoothed Current: {self.smoothed_values.get('2', SmoothedCurrent()).get_value(self.ERROR_VALUE)} A ({self.smoothed_values.get('2', SmoothedCurrent()).get_quality()} %), "
+        #                  f"Channel 3 Smoothed Current: {self.smoothed_values.get('3', SmoothedCurrent()).get_value(self.ERROR_VALUE)} A ({self.smoothed_values.get('3', SmoothedCurrent()).get_quality()} %)")
+
+        # Log the values to CSV if the battery current is significant
+        if abs(batt_current) > 0.1:
             self.csvLogger.log(batt_current, batt_voltage,
                                ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedCurrent()).get_value(self.ERROR_VALUE),
                                ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedCurrent()).get_value(self.ERROR_VALUE),
@@ -160,4 +179,4 @@ class DcCurrents:
         self.stop_background_thread()
         if self.csvLogger:
             self.csvLogger.flush()
-            self.logger.info("dc_currents: CSV logger flushed")
+            self.logger.info("CSV logger flushed")
