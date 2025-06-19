@@ -1,21 +1,23 @@
-import logging
 from dc_currents import DcCurrents
 import time
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)-15s %(name)-8s %(levelname)s: %(message)s")
     
     dc_currents = DcCurrents()
-    logging.info("DcCurrents initialized. Starting to read smoothed values...")
+    print("DcCurrents initialized. Starting to read and log current values...")
     try:
         while True:
             smoothed_values = dc_currents.get_latest_smoothed_values()
-            logging.info(f"Smoothed Values: {smoothed_values}")
+            for channel, smoothed_current in smoothed_values.items():
+                print(f"Channel {channel}: Smoothed Current: {smoothed_current.get_value()}, "
+                      f"Baseline Current: {smoothed_current.get_baseline_current()}, "
+                      f"Voltage: {smoothed_current.get_voltage()}, "
+                      f"Quality: {smoothed_current.get_quality()}")
             time.sleep(1)  # Adjust the sleep time as needed
     except KeyboardInterrupt:
-        logging.info("Stopping DcCurrents...")
+        print("Stopping DcCurrents due to keyboard interrupt.")
     except Exception as e:
-        logging.exception("An error occurred in DcCurrents: %s", e)
+        print(f"An error occurred in DcCurrents: {e}")
     finally:
         dc_currents.shutdown()
-        logging.info("DcCurrents shutdown complete.")
+        print("DcCurrents shutdown complete.")
