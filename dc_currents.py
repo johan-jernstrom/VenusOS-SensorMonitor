@@ -103,15 +103,6 @@ class DcCurrents:
         ads_voltages = {}
         raw_currents = {}
 
-        self.ensure_i2c_connected()
-        if not self.i2cConnected:
-            self.logger.debug("I2C not initialized, waiting 1 second before retrying")
-            for i in self.channels:
-                self.smoothed_values[str(i)].update(None)
-            # sleep to avoid busy-waiting
-            time.sleep(1)
-            return
-        
         # Read voltage and current from dbus
         try:
             batt_voltage, batt_current = self.batt_reader.get_batt_voltage_current()
@@ -120,6 +111,16 @@ class DcCurrents:
             raise
         # Set baseline current as battery current divided by number of channels
         baseline = batt_current / len(self.channels) if len(self.channels) > 0 else batt_current
+        
+        self.ensure_i2c_connected()
+        if not self.i2cConnected:
+            self.logger.debug("I2C not initialized, waiting 1 second before retrying")
+            for i in self.channels:
+                self.smoothed_values[str(i)].update(None, baseline, batt_voltage)
+            # sleep to avoid busy-waiting
+            time.sleep(1)
+            return
+        
         for i in self.channels:
             try:
                 ads_voltage = getattr(self, 'channel' + str(i)).voltage

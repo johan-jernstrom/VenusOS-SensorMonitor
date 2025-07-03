@@ -27,7 +27,7 @@ def update_temp_services():
     newTemps.update(w1_temps.read_temperatures())   # add w1 temperatures
     newTemps['rpi'] = cpu_temp.read_temperature()   # add CPU temperature
     
-    for id in newTemps:
+    for id in list(newTemps):
         data = newTemps[id]
         if data is None:
             continue
@@ -55,6 +55,7 @@ def create_temp_service_if_not_exists(sensorData):
         tempServices[id] = TemperatureService(sensorData.connection, sensorData.id, instance)
 
 def update_current_services():
+    logging.debug('Updating current services...')
     latestSmoothedCurrents = dc_currents.get_latest_smoothed_values()  # Get the latest smoothed values from the dc_currents instance
     for id in latestSmoothedCurrents:
         create_current_service_if_not_exist(id)
@@ -114,9 +115,7 @@ def main():
     # and then every 5 seconds
     GLib.timeout_add_seconds(5, lambda: update_temp_services())
 
-    # Start the DC currents background thread
     dc_currents.start_background_thread()  # Start the background thread for reading currents
-    # and then every second
     GLib.timeout_add_seconds(1, lambda: update_current_services())
 
     logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')

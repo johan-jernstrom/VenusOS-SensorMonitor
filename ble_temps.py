@@ -120,6 +120,7 @@ class BLETemps:
 
         sensor_data = self._parse_bthome_v2_data(advertisement_data)
         if not sensor_data:
+            self.logger.debug(f"Failed to parse sensor data for device {device.name}")
             return
         sensor_data.id = device.name
         self.logger.debug(f"Device {device.name} has temperature {sensor_data.temperature} and humidity {sensor_data.humidity} at {sensor_data.timestamp}")
@@ -129,5 +130,5 @@ class BLETemps:
     def get_values(self):
         with self.Lock:
             # remove values older than 5 minutes before returning
-            self.values = {k:v for k,v in self.values.items() if v.timestamp > datetime.now() - timedelta(minutes=5)}
+            self.values = {k:v for k,v in self.values.items() if v is not None and v.timestamp > datetime.now() - timedelta(minutes=5)}
             return self.values
