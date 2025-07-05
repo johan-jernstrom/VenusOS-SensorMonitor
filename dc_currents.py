@@ -109,6 +109,14 @@ class DcCurrents:
         except Exception as e:
             self.logger.exception("Error reading battery voltage and current from dbus")
             raise
+        
+        if(batt_current is None or abs(batt_current) < 1):
+            self.logger.debug("Battery current is None or less than 1, skipping current reading")
+            # Update smoothed values with None
+            for i in self.channels:
+                self.smoothed_values[str(i)].update(None, 0, batt_voltage)
+            return
+        
         # Set baseline current as battery current divided by number of channels
         baseline = batt_current / len(self.channels) if len(self.channels) > 0 else batt_current
         
@@ -144,11 +152,10 @@ class DcCurrents:
         #                  f"Channel 3 Smoothed Current: {self.smoothed_values.get('3', SmoothedCurrent()).get_value(self.ERROR_VALUE)} A ({self.smoothed_values.get('3', SmoothedCurrent()).get_quality()} %)")
 
         # Log the values to CSV if the battery current is significant
-        if abs(batt_current) > 0.1:
-            self.csvLogger.log(batt_current, batt_voltage,
-                               ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedCurrent()).get_value(self.ERROR_VALUE),
-                               ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedCurrent()).get_value(self.ERROR_VALUE),
-                               ads_voltages.get(3, self.ERROR_VALUE), raw_currents.get(3, self.ERROR_VALUE), self.smoothed_values.get('3', SmoothedCurrent()).get_value(self.ERROR_VALUE))
+        self.csvLogger.log(batt_current, batt_voltage,
+                            ads_voltages.get(1, self.ERROR_VALUE), raw_currents.get(1, self.ERROR_VALUE), self.smoothed_values.get('1', SmoothedCurrent()).get_value(self.ERROR_VALUE),
+                            ads_voltages.get(2, self.ERROR_VALUE), raw_currents.get(2, self.ERROR_VALUE), self.smoothed_values.get('2', SmoothedCurrent()).get_value(self.ERROR_VALUE),
+                            ads_voltages.get(3, self.ERROR_VALUE), raw_currents.get(3, self.ERROR_VALUE), self.smoothed_values.get('3', SmoothedCurrent()).get_value(self.ERROR_VALUE))
 
     def _background_reader(self):
         while not self._stop_event.is_set():
