@@ -111,7 +111,7 @@ class BLETemps:
         # logging.debug(f"Device {device.name} ({device.address}) RSSI: {device.rssi}")
         if not device.address.startswith("A4:C1:38:"): # All Xiaomi Mijia LYWSD03MMC devices start with this address
             return
-        self.logger.debug(f"Found Xiaomi Mijia device {device.name} ({device.address}) RSSI: {device.rssi}")
+        self.logger.debug(f"Found Xiaomi Mijia device {device.name} ({device.address}) RSSI: {advertising_data.rssi}")
         advertisement_data = advertising_data.service_data.get('0000fcd2-0000-1000-8000-00805f9b34fb')  # BTHome V2 service UUID
         if not advertisement_data:
             self.logger.warning(f"No BTHome V2 service data found in advertisement data for device {device.name}")
