@@ -9,7 +9,7 @@ from vedbus import VeDbusItemImport
 dbusConn = dbus.SessionBus() if 'DBUS_SESSION_BUS_ADDRESS' in os.environ else dbus.SystemBus()
 
 class DbusBatteryReader:
-    def __init__(self, service_name="com.victronenergy.battery.ttyUSB0"):
+    def __init__(self, service_name="com.victronenergy.battery.ttyUSB1"):
         self.service_name = service_name
         dbusConn = dbus.SessionBus() if 'DBUS_SESSION_BUS_ADDRESS' in os.environ else dbus.SystemBus()
 
